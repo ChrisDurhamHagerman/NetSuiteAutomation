@@ -1,0 +1,17 @@
+﻿@page "/FormaImport/DownloadForma"
+@model NetSuiteAutomation.Pages.FormaDownloadModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Download Forma CSV";
+}
+
+<h2>Download Forma CSV</h2>
+
+<p>
+    <a class="btn btn-primary" asp-page-handler="Download">Download Latest Forma CSV</a>
+</p>
+
+@if (!string.IsNullOrEmpty(Model.StatusMessage))
+{
+    <p>@Model.StatusMessage</p>
+}

@@ -1,0 +1,17 @@
+﻿@page
+@model NetSuiteAutomation.Pages.CsvImport.ViewModel
+@{
+    ViewData["Title"] = "Last Import";
+}
+
+<h2>Last Imported File</h2>
+
+@if (Model.FileName == null)
+{
+    <p>No import file found.</p>
+}
+else
+{
+    <p><strong>File:</strong> @Model.FileName</p>
+    <pre>@Model.CsvContent</pre>
+}

@@ -1,0 +1,14 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<h1>NetSuite Automation</h1>
+<p>This is the home page.</p>
+<p>To see the latest import, visit <a href="/CsvImport/View">/CsvImport/View</a>.</p>
+<form method="get" action="/api/Reports/download">
+  <button type="submit" class="btn btn-primary">
+    Download Reports
+  </button>
+</form>
