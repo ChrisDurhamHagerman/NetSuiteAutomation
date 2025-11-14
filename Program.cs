@@ -18,6 +18,8 @@ builder.Services.AddSingleton<ImportFormaService>();
 builder.Services.AddSingleton<FormaAccessImporter>();
 builder.Services.AddSingleton<LogService>();
 builder.Services.AddScoped<AccessMacroService>();
+builder.Services.AddScoped<ProjectActivityService>();
+
 
 
 var app = builder.Build();

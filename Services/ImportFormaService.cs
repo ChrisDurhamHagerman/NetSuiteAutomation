@@ -31,8 +31,8 @@ namespace NetSuiteAutomation.Services
 
                 Directory.CreateDirectory(_downloadFolder);
 
-                string keyId = "887ea26f074541ed88cd5713ff1bcdd6";
-                string secretKey = "c992f13e5678435fc1915e923bef6b194c375fea2e9a40a814306ce75c1bd891";
+                string keyId = "648506c0befa4af6b44d2c1961788ccf";
+                string secretKey = "12949c76244262edf1e13e11f2defca8455a7056457e08e1a70aa715e757b079";
                 string report = "all_transaction_fees";
                 string csn = "0070000545";
                 string baseURL = "https://1130-api.forma.ai/report-service/";
