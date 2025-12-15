@@ -76,6 +76,7 @@ namespace NetSuiteAutomation.Services
                             [Original Invoice Date],
                             [Invoice Date],
                             [Original Order #],
+                            [Order Line],
                             [SAP Product Line],
                             [Product Class],
                             [Product Name],
@@ -97,7 +98,7 @@ namespace NetSuiteAutomation.Services
                         ) 
                         VALUES (
                             @program, @soldToCustomerNumber, @soldToCustomerName, @quoteNumber, 
-                            @quoteLineItemId, @customerPoNumber, @invoiceNumber, @originalInvoiceDate, @invoiceDate, @originalOrderNumber, @sapProductLine, 
+                            @quoteLineItemId, @customerPoNumber, @invoiceNumber, @originalInvoiceDate, @invoiceDate, @originalOrderNumber, @orderLine, @sapProductLine, 
                             @productClass, @productName, @contractTerm, @contractEndDate, @wwsOfferTypeGroupDetail,
                             @totalBillingBillingCurrency, @payoutAmountBillingCurrency, @qtdPayout, @originalOrderSeat, @quantityBilled,
                             @settlementStartDate, @settlementEndDate, @subscriptionId, @referenceSubscriptionId, @paymentType, @billingSequence, @EndUserTradeCompanyCSN
@@ -116,6 +117,7 @@ namespace NetSuiteAutomation.Services
                                     command.Parameters.AddWithValue("@originalInvoiceDate", originalInvoiceDate);
                                     command.Parameters.AddWithValue("@invoiceDate", invoiceDate);
                                     command.Parameters.AddWithValue("@originalOrderNumber", values[26]);
+                                    command.Parameters.AddWithValue("@orderLine", values[141]);
                                     command.Parameters.AddWithValue("@sapProductLine", values[33]);
                                     command.Parameters.AddWithValue("@productClass", values[34]);
                                     command.Parameters.AddWithValue("@productName", values[35]);
