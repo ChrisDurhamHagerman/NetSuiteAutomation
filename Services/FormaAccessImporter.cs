@@ -54,15 +54,80 @@ namespace NetSuiteAutomation.Services
                                 if (values[10].Contains(","))
                                     values[10] = values[10].Replace(",", " ");
 
-                                DateTime.TryParse(values[25], out DateTime invoiceDate);
-                                DateTime.TryParse(values[24], out DateTime originalInvoiceDate);
-                                DateTime.TryParse(values[48], out DateTime contractEndDate);
-                                DateTime.TryParse(values[117], out DateTime settlementStartDate);
-                                DateTime.TryParse(values[120], out DateTime settlementEndDate);
+                                DateTime invoiceDate = DateTime.MinValue;
+                                if (!string.IsNullOrEmpty(values[25]))
+                                {
+                                    if (!DateTime.TryParse(values[25], out invoiceDate))
+                                    {
+                                        throw new Exception($"Invalid DateTime format on line {lineNumber}, Invoice Date: {values[25]}");
+                                    }
+                                }
 
-                                double.TryParse(values[72], out double totalBillingBillingCurrency);
-                                double.TryParse(values[83], out double payoutAmountBillingCurrency);
-                                int.TryParse(values[178], out int billingSequence);
+                                DateTime originalInvoiceDate = DateTime.MinValue;
+                                if (!string.IsNullOrEmpty(values[24]))
+                                {
+                                    if (!DateTime.TryParse(values[24], out originalInvoiceDate))
+                                    {
+                                        throw new Exception($"Invalid DateTime format on line {lineNumber}, Original Invoice Date: {values[24]}");
+                                    }
+                                }
+
+                                DateTime contractEndDate = DateTime.MinValue;
+                                if (!string.IsNullOrEmpty(values[48]))
+                                {
+                                    if (!DateTime.TryParse(values[48], out contractEndDate))
+                                    {
+                                        throw new Exception($"Invalid DateTime format on line {lineNumber}, Contract End Date: {values[48]}");
+
+                                    }
+                                }
+
+                                DateTime settlementStartDate = DateTime.MinValue;
+                                if (!string.IsNullOrEmpty(values[117]))
+                                {
+                                    if (!DateTime.TryParse(values[117], out settlementStartDate))
+                                    {
+                                        throw new Exception($"Invalid DateTime format on line {lineNumber}, Settlement Start Date: {values[117]}");
+                                    }
+                                }
+
+                                DateTime settlementEndDate = DateTime.MinValue;
+                                if (!string.IsNullOrEmpty(values[120]))
+                                {
+                                    if (!DateTime.TryParse(values[120], out settlementEndDate))
+                                    {
+                                        throw new Exception($"Invalid DateTime format on line {lineNumber}, Settlement End Date: {values[120]}");
+                                    }
+                                }
+
+                                double totalBillingBillingCurrency = 0.0;
+                                if (!string.IsNullOrEmpty(values[72]))
+                                {
+                                    if (!double.TryParse(values[72], out totalBillingBillingCurrency))
+                                    {
+                                        throw new Exception($"Invalid double format on line {lineNumber}, Total Billing (Target Currency): {values[72]}");
+                                    }
+                                }
+
+                                double payoutAmountBillingCurrency = 0.0;
+                                if (!string.IsNullOrEmpty(values[83]))
+                                {
+                                    if (!double.TryParse(values[83], out payoutAmountBillingCurrency))
+                                    {
+                                        throw new Exception($"Invalid double format on line {lineNumber}, Total Billing (Target Currency): {values[83]}");
+                                    }
+                                }
+
+                                int billingSequence = 0; // Default value for Billing Sequence
+                                if (!string.IsNullOrEmpty(values[177]))
+                                {
+                                    if (!int.TryParse(values[177], out billingSequence))
+                                    {
+                                        // Log the issue and assign a default value
+                                        LogError(logFilePath, $"Invalid int format on line {lineNumber}, Billing Sequence: {values[177]}");
+                                        billingSequence = 0; // Assign default if parsing fails
+                                    }
+                                }
 
                                 string insertCommandText = @"
                         INSERT INTO [Autodesk Data-IMPORT] (
