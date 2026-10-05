@@ -68,12 +68,14 @@ namespace NetSuiteAutomation.Services
                                     INSERT INTO [dbo_autodesk_Sales_Orders] (
                                         [InternalID], [Customer], [SalesOrder], [AutodeskQuoteNbr], 
                                         [LineID], [AutodeskLineID], [Item], [Item_value], [Quantity], 
-                                        [Unit_Customer_Price], [AD_Start_Date], [AD_End_Date]
+                                        [Unit_Customer_Price], [AD_Start_Date], [AD_End_Date],
+                                        [Autodesk CSN], [Autodesk Subscription ID]
                                     ) 
                                     VALUES (
                                         @internalID, @customer, @salesOrder, @autodeskQuoteNbr, 
                                         @lineID, @autodeskLineID, @item, @itemValue, @quantity, 
-                                        @unitCustomerPrice, @adStartDate, @adEndDate
+                                        @unitCustomerPrice, @adStartDate, @adEndDate,
+                                        @autodeskCsn, @autodeskSubscriptionId
                                     )";
 
                                 using (OleDbCommand command = new OleDbCommand(insertCommandText, connection))
@@ -104,6 +106,8 @@ namespace NetSuiteAutomation.Services
                                         LogError(logFilePath, $"Warning on line {lineNumber}: Invalid AD End Date format. Value: {values[11]}");
                                         command.Parameters.AddWithValue("@adEndDate", DBNull.Value);
                                     }
+                                    command.Parameters.AddWithValue("@autodeskCsn", values[12]);
+                                    command.Parameters.AddWithValue("@autodeskSubscriptionId", values[13]);
 
                                     command.ExecuteNonQuery();
                                 }

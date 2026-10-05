@@ -8,23 +8,22 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-		<PackageReference Include="System.Data.OleDb" Version="9.0.6" />
-
-		<!-- add these two -->
-		<PackageReference Include="System.IO.Compression" Version="4.3.0" />
-		<PackageReference Include="System.IO.Compression.ZipFile" Version="4.3.0" />
+	  <COMReference Include="Microsoft.Office.Core">
+	    <WrapperTool>tlbimp</WrapperTool>
+	    <VersionMinor>8</VersionMinor>
+	    <VersionMajor>2</VersionMajor>
+	    <Guid>2df8d04c-5bfa-101b-bde5-00aa0044de52</Guid>
+	    <Lcid>0</Lcid>
+	    <Isolated>false</Isolated>
+	    <EmbedInteropTypes>true</EmbedInteropTypes>
+	  </COMReference>
 	</ItemGroup>
 
 	<ItemGroup>
-		<COMReference Include="Microsoft Access 16.0 Object Library">
-			<Guid>{4AC9E1DA-5BAD-4AC7-86E3-24F4CDCECA28}</Guid>
-			<VersionMajor>16</VersionMajor>
-			<VersionMinor>0</VersionMinor>
-			<Lcid>0</Lcid>
-			<WrapperTool>tlbimp</WrapperTool>
-			<Isolated>false</Isolated>
-		</COMReference>
-	</ItemGroup>	
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="System.Data.OleDb" Version="9.0.6" />
+		<PackageReference Include="System.IO.Compression" Version="4.3.0" />
+		<PackageReference Include="System.IO.Compression.ZipFile" Version="4.3.0" />
+	</ItemGroup>
 
 </Project>

@@ -12,8 +12,6 @@ public class ProjectActivityService
     public bool ImportWorkflowCsvToAccess(string csvPath)
     {
         string logPath = Path.Combine(_logFolder, "WorkflowImportIssues.txt");
-        string fileName = Path.GetFileName(csvPath);
-        string csvFolder = Path.GetDirectoryName(csvPath) ?? "";
 
         try
         {
@@ -25,41 +23,56 @@ public class ProjectActivityService
                 return false;
             }
 
-            // Log header (no mutation)
+            // Log header
             using (var sr = new StreamReader(csvPath, Encoding.Default, true))
             {
                 string? header = sr.ReadLine();
                 File.AppendAllText(logPath, $"[{DateTime.Now}] INFO: CSV Header: {header}{Environment.NewLine}");
             }
 
-            // DO NOT REWRITE THE FILE — it is already in Access-safe format
-
-            // Write schema.ini matching our format
-            WriteSchemaIni(csvFolder, fileName, logPath);
-
-            // Preflight: confirm ACE sees expected columns
-            PreflightLogTextDriverHeaders(csvFolder, fileName, logPath);
-
-            // Import into Access
             string connStr = $@"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={_databasePath};Persist Security Info=False;";
+
             using (OleDbConnection connection = new OleDbConnection(connStr))
             {
                 connection.Open();
 
-                string importQuery = $@"
-INSERT INTO [Project Activities] 
-    ([Internal ID], [Sales Rep], [Company/Project], [Created By], [Subject], [Date], [Comment])
-SELECT 
-    [Internal ID], [Sales Rep], [Company/Project], [Created By], [Subject], [Date], [Comment]
-FROM [Text;FMT=Delimited;HDR=YES;Database={csvFolder};].[{fileName}]";
+                string insertSql = @"
+INSERT INTO [Project Activities]
+([Internal ID], [Sales Rep], [Company/Project], [Created By], [Subject], [Date], [Comment])
+VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-                File.AppendAllText(logPath, $"[{DateTime.Now}] INFO: Import SQL:{Environment.NewLine}{importQuery}{Environment.NewLine}");
+                using var cmd = new OleDbCommand(insertSql, connection);
 
-                using (var cmd = new OleDbCommand(importQuery, connection))
+                int successCount = 0;
+                int rowNumber = 1;
+
+                foreach (var line in File.ReadLines(csvPath).Skip(1)) // skip header
                 {
-                    int rows = cmd.ExecuteNonQuery();
-                    File.AppendAllText(logPath, $"[{DateTime.Now}] SUCCESS: Inserted {rows} records from {fileName}{Environment.NewLine}");
+                    try
+                    {
+                        var parts = SplitCsvLine(line);
+
+                        cmd.Parameters.Clear();
+                        cmd.Parameters.AddWithValue("@p1", int.Parse(parts[0]));
+                        cmd.Parameters.AddWithValue("@p2", parts[1]);
+                        cmd.Parameters.AddWithValue("@p3", parts[2]);
+                        cmd.Parameters.AddWithValue("@p4", parts[3]);
+                        cmd.Parameters.AddWithValue("@p5", parts[4]);
+                        cmd.Parameters.AddWithValue("@p6", DateTime.Parse(parts[5]));
+                        cmd.Parameters.AddWithValue("@p7", parts[6]);
+
+                        cmd.ExecuteNonQuery();
+                        successCount++;
+                    }
+                    catch (Exception exRow)
+                    {
+                        File.AppendAllText(logPath, $"[{DateTime.Now}] ERROR on row {rowNumber}: {exRow.Message}{Environment.NewLine}");
+                    }
+
+                    rowNumber++;
                 }
+
+                File.AppendAllText(logPath, $"[{DateTime.Now}] SUCCESS: Inserted {successCount} records from {csvPath}{Environment.NewLine}");
             }
 
             return true;
@@ -69,6 +82,35 @@ FROM [Text;FMT=Delimited;HDR=YES;Database={csvFolder};].[{fileName}]";
             File.AppendAllText(logPath, $"[{DateTime.Now}] ERROR: {ex.Message}{Environment.NewLine}");
             return false;
         }
+    }
+
+    private static string[] SplitCsvLine(string line)
+    {
+        var result = new List<string>();
+        var current = new StringBuilder();
+        bool inQuotes = false;
+
+        foreach (char c in line)
+        {
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (c == ',' && !inQuotes)
+            {
+                result.Add(current.ToString());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        result.Add(current.ToString());
+        return result.ToArray();
     }
 
     private static void WriteSchemaIni(string folderPath, string fileName, string logPath)
