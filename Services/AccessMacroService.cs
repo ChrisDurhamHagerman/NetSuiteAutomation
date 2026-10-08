@@ -1,6 +1,7 @@
 ﻿using System;
-using System.Diagnostics;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NetSuiteAutomation.Services
 {
@@ -9,7 +10,14 @@ namespace NetSuiteAutomation.Services
         private readonly string _logFolder = @"C:\ADSK-Automation\Logs";
         private readonly string _exePath = @"C:\ADSK-Automation\Release\AccessMacroRunner.exe";
 
-        public void RunAccessMacroAndExport()
+        private readonly ChildProcessRunner _processRunner;
+
+        public AccessMacroService(ChildProcessRunner processRunner)
+        {
+            _processRunner = processRunner;
+        }
+
+        public async Task RunAccessMacroAndExportAsync(CancellationToken cancellationToken)
         {
             string logFilePath = Path.Combine(_logFolder, "AccessMacroIssues.txt");
 
@@ -18,40 +26,20 @@ namespace NetSuiteAutomation.Services
                 Directory.CreateDirectory(_logFolder);
                 Log(logFilePath, "🚀 Launching AccessMacroRunner.exe...");
 
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = _exePath,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
+                var result = await _processRunner.RunAsync(_exePath, cancellationToken: cancellationToken);
+                if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+                    Log(logFilePath, "[OUT] " + result.StandardOutput.Trim());
+                if (!string.IsNullOrWhiteSpace(result.StandardError))
+                    Log(logFilePath, "[ERR] " + result.StandardError.Trim());
 
-                using (Process process = new Process())
-                {
-                    process.StartInfo = startInfo;
-                    process.OutputDataReceived += (sender, args) =>
-                    {
-                        if (!string.IsNullOrEmpty(args.Data))
-                            Log(logFilePath, $"[OUT] {args.Data}");
-                    };
-                    process.ErrorDataReceived += (sender, args) =>
-                    {
-                        if (!string.IsNullOrEmpty(args.Data))
-                            Log(logFilePath, $"[ERR] {args.Data}");
-                    };
-
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-                    process.WaitForExit();
-
-                    Log(logFilePath, $"✅ AccessMacroRunner.exe completed with exit code {process.ExitCode}.");
-                }
+                Log(logFilePath, $"✅ AccessMacroRunner.exe completed with exit code {result.ExitCode}.");
+                if (result.ExitCode != 0)
+                    throw new InvalidOperationException("AccessMacroRunner exited with code " + result.ExitCode + ".");
             }
             catch (Exception ex)
             {
                 Log(logFilePath, $"❌ Error launching AccessMacroRunner.exe: {ex.Message}");
+                throw;
             }
         }
 

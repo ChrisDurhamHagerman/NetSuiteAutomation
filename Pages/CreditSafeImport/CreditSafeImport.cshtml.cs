@@ -4,11 +4,20 @@ using Microsoft.AspNetCore.Http;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using NetSuiteAutomation.Services;
+using System.Diagnostics;
 
 namespace NetSuiteAutomation.Pages
 {
     public class CreditSafeImportModel : PageModel
     {
+        private readonly BackgroundTaskQueue _backgroundTasks;
+
+        public CreditSafeImportModel(BackgroundTaskQueue backgroundTasks)
+        {
+            _backgroundTasks = backgroundTasks;
+        }
+
         private readonly string _importFolder = @"C:\ADSK-Automation\CreditSafe Imports";
         private readonly string _logFilePath = @"C:\ADSK-Automation\automation_log.txt";
         private readonly string _oldImportsFolder = @"C:\ADSK-Automation\CreditSafe Imports\Old Imports";
@@ -90,7 +99,7 @@ namespace NetSuiteAutomation.Pages
                 LogMessage($"New file saved successfully: {newFilePath}");
 
                 // Launch CreditSafeLogicController in background (non-blocking)
-                CallCreditSafeLogicController(newFilePath);
+                EnqueueCreditSafeLogicController(newFilePath);
 
                 Message = $"File '{FileUpload.FileName}' uploaded. Processing has started.";
             }
@@ -103,57 +112,24 @@ namespace NetSuiteAutomation.Pages
             return Page();
         }
 
-        private void CallCreditSafeLogicController(string excelFilePath)
+        private void EnqueueCreditSafeLogicController(string excelFilePath)
         {
-            try
+            _backgroundTasks.Enqueue(async (services, cancellationToken) =>
             {
+                var log = services.GetRequiredService<LogService>();
+                var processRunner = services.GetRequiredService<ChildProcessRunner>();
                 string exePath = @"C:\ADSK-Automation\CreditSafe\CreditSafeLogicController.exe";
-                if (!System.IO.File.Exists(exePath))
-                {
-                    LogMessage("CreditSafeLogicController.exe not found in C:\\ADSK-Automation\\CreditSafe, skipping logic run.");
-                    return;
-                }
+                var result = await processRunner.RunAsync(exePath, new[] { excelFilePath }, cancellationToken);
 
-                var processInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = exePath,
-                    Arguments = $"\"{excelFilePath}\"",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                    WorkingDirectory = Path.GetDirectoryName(exePath)
-                };
+                if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+                    log.Log("CreditSafeLogicController output: " + result.StandardOutput.Trim());
+                if (!string.IsNullOrWhiteSpace(result.StandardError))
+                    log.Log("CreditSafeLogicController error: " + result.StandardError.Trim());
 
-                // Fire-and-forget: run in the background so the page returns immediately
-                _ = Task.Run(() =>
-                {
-                    try
-                    {
-                        using (var process = System.Diagnostics.Process.Start(processInfo))
-                        {
-                            string output = process.StandardOutput.ReadToEnd();
-                            string error = process.StandardError.ReadToEnd();
-                            process.WaitForExit();
-
-                            if (!string.IsNullOrWhiteSpace(output))
-                                LogMessage($"CreditSafeLogicController Output: {output.Trim()}");
-                            if (!string.IsNullOrWhiteSpace(error))
-                                LogMessage($"CreditSafeLogicController Error: {error.Trim()}");
-
-                            LogMessage($"CreditSafeLogicController exited with code {process.ExitCode}.");
-                        }
-                    }
-                    catch (Exception runEx)
-                    {
-                        LogMessage($"Error running CreditSafeLogicController: {runEx.Message}");
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                LogMessage($"Error preparing to call CreditSafeLogicController: {ex.Message}");
-            }
+                log.Log("CreditSafeLogicController exited with code " + result.ExitCode + ".");
+                if (result.ExitCode != 0)
+                    throw new InvalidOperationException("CreditSafeLogicController exited with code " + result.ExitCode + ".");
+            });
         }
 
         private void LogMessage(string message)

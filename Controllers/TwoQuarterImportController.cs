@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using NetSuiteAutomation.Services;
-using System.Diagnostics;
 using System.Text;
 
 namespace NetSuiteAutomation.Controllers
@@ -17,14 +16,16 @@ namespace NetSuiteAutomation.Controllers
         };
 
         private const string ImportFolder = @"C:\ADSK-Automation\2Qtrs";
-        private const string ImportFileName = "JMHAutodeskSalesOrders2QtrsAllSyncResults.csv";
+        private const string IncomingFolder = @"C:\ADSK-Automation\2Qtrs\Incoming";
         private const string RunnerPath = @"C:\ADSK-Automation\Release\AccessMacroRunner.exe";
 
         private readonly LogService _log;
+        private readonly BackgroundTaskQueue _backgroundTasks;
 
-        public TwoQuarterImportController(LogService log)
+        public TwoQuarterImportController(LogService log, BackgroundTaskQueue backgroundTasks)
         {
             _log = log;
+            _backgroundTasks = backgroundTasks;
         }
 
         [HttpPost("import")]
@@ -41,48 +42,63 @@ namespace NetSuiteAutomation.Controllers
             {
                 ValidatePayload(jsonData);
 
-                Directory.CreateDirectory(ImportFolder);
-                string archiveFolder = Path.Combine(ImportFolder, "Old");
-                Directory.CreateDirectory(archiveFolder);
+                Directory.CreateDirectory(IncomingFolder);
 
                 temporaryPath = Path.Combine(
-                    ImportFolder,
+                    IncomingFolder,
                     ".twoqtrs_" + Guid.NewGuid().ToString("N") + ".tmp");
 
                 WriteCsv(jsonData, temporaryPath);
 
-                foreach (string existingFile in Directory.GetFiles(ImportFolder, "*.csv", SearchOption.TopDirectoryOnly))
-                    ArchiveFile(existingFile, archiveFolder);
-
-                string importPath = Path.Combine(ImportFolder, ImportFileName);
+                string jobId = Guid.NewGuid().ToString("N");
+                string importPath = Path.Combine(
+                    IncomingFolder,
+                    "JMHAutodeskSalesOrders2QtrsAllSyncResults_" + DateTime.Now.ToString("yyyyMMdd_HHmmss")
+                    + "_" + jobId.Substring(0, 8) + ".csv");
                 System.IO.File.Move(temporaryPath, importPath);
                 temporaryPath = string.Empty;
 
                 if (!System.IO.File.Exists(RunnerPath))
                     throw new FileNotFoundException("AccessMacroRunner executable not found.", RunnerPath);
 
-                var process = Process.Start(new ProcessStartInfo
+                _backgroundTasks.Enqueue(async (services, cancellationToken) =>
                 {
-                    FileName = RunnerPath,
-                    Arguments = "twoqtrs",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WorkingDirectory = Path.GetDirectoryName(RunnerPath) ?? ImportFolder
-                });
+                    var log = services.GetRequiredService<LogService>();
+                    var processRunner = services.GetRequiredService<ChildProcessRunner>();
+                    try
+                    {
+                        var result = await processRunner.RunAsync(
+                            RunnerPath,
+                            new[] { "twoqtrs", importPath },
+                            cancellationToken);
 
-                if (process == null)
-                    throw new InvalidOperationException("AccessMacroRunner could not be started.");
+                        if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+                            log.Log("Two-quarter runner output: " + result.StandardOutput.Trim());
+                        if (!string.IsNullOrWhiteSpace(result.StandardError))
+                            log.Log("Two-quarter runner error: " + result.StandardError.Trim());
+                        if (result.ExitCode != 0)
+                            throw new InvalidOperationException("Two-quarter runner exited with code " + result.ExitCode + ".");
+
+                        log.Log("Two-quarter runner completed job " + jobId + ".");
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Log("Two-quarter runner failed job " + jobId + ": " + ex.Message);
+                        throw;
+                    }
+                });
 
                 _log.Log(
                     "Two-quarter import accepted. Saved " + jsonData.Count
-                    + " rows to " + importPath + " and started AccessMacroRunner PID " + process.Id + ".");
+                    + " rows to " + importPath + " and queued AccessMacroRunner job " + jobId + ".");
 
                 return Accepted(new
                 {
-                    message = "Two-quarter data received. Access import and report processing started.",
+                    message = "Two-quarter data received. Access import and report processing queued.",
+                    jobId,
+                    status = "queued",
                     rowCount = jsonData.Count,
-                    filePath = importPath,
-                    processId = process.Id
+                    filePath = importPath
                 });
             }
             catch (InvalidDataException ex)
@@ -172,23 +188,5 @@ namespace NetSuiteAutomation.Controllers
             return safeValue;
         }
 
-        private static void ArchiveFile(string sourcePath, string archiveFolder)
-        {
-            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string baseName = Path.GetFileNameWithoutExtension(sourcePath);
-            string extension = Path.GetExtension(sourcePath);
-            string destination = Path.Combine(archiveFolder, baseName + "_" + timestamp + extension);
-            int suffix = 1;
-
-            while (System.IO.File.Exists(destination))
-            {
-                destination = Path.Combine(
-                    archiveFolder,
-                    baseName + "_" + timestamp + "_" + suffix + extension);
-                suffix++;
-            }
-
-            System.IO.File.Move(sourcePath, destination);
-        }
     }
 }
