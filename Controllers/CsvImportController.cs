@@ -15,21 +15,18 @@ namespace NetSuiteAutomation.Controllers
     public class CsvImportController : ControllerBase
     {
         private readonly AccessImportService _accessImportService;
-        private readonly ImportFormaService _importFormaService;
         private readonly LogService _log;
-        private readonly AccessMacroService _accessMacroService;
+        private readonly BackgroundTaskQueue _backgroundTasks;
         private readonly string _importFolder = @"C:\ADSK-Automation\NetSuiteImports";
 
         public CsvImportController(
             AccessImportService accessImportService,
-            ImportFormaService importFormaService,
-            AccessMacroService accessMacroService,
-            LogService log)
+            LogService log,
+            BackgroundTaskQueue backgroundTasks)
         {
             _accessImportService = accessImportService;
-            _importFormaService = importFormaService;
             _log = log;
-            _accessMacroService = accessMacroService;
+            _backgroundTasks = backgroundTasks;
         }
 
         [HttpPost("import")]
@@ -81,38 +78,41 @@ namespace NetSuiteAutomation.Controllers
                 });
 
                 // 🔄 Start Forma import and macro execution in background
-                Task.Run(async () =>
+                _backgroundTasks.Enqueue(async (services, cancellationToken) =>
                 {
+                    var log = services.GetRequiredService<LogService>();
+                    var formaImport = services.GetRequiredService<ImportFormaService>();
+                    var macroService = services.GetRequiredService<AccessMacroService>();
                     try
                     {
-                        _log.Log("📥 Beginning Forma CSV import...");
-                        bool formaSuccess = await _importFormaService.ImportFormaDataAsync();
+                        log.Log("📥 Beginning Forma CSV import...");
+                        bool formaSuccess = await formaImport.ImportFormaDataAsync();
 
                         if (formaSuccess)
                         {
-                            _log.Log("✅ Forma CSV import completed.");
-                            _log.Log("🧩 Starting Access macro execution and export to CSV...");
+                            log.Log("✅ Forma CSV import completed.");
+                            log.Log("🧩 Starting Access macro execution and export to CSV...");
 
-                            await Task.Delay(10000); // Allow file locks to release
+                            await Task.Delay(10000, cancellationToken); // Allow file locks to release
 
                             try
                             {
-                                _accessMacroService.RunAccessMacroAndExport();
-                                _log.Log("✅ Macros ran and CSV exported.");
+                                await macroService.RunAccessMacroAndExportAsync(cancellationToken);
+                                log.Log("✅ Macros ran and CSV exported.");
                             }
                             catch (Exception macroEx)
                             {
-                                _log.Log($"❌ Error running macro and exporting CSV: {macroEx.Message}");
+                                log.Log($"❌ Error running macro and exporting CSV: {macroEx.Message}");
                             }
                         }
                         else
                         {
-                            _log.Log("❌ Forma import failed. Check FormaImportIssues.txt for detailed error info.");
+                            log.Log("❌ Forma import failed. Check FormaImportIssues.txt for detailed error info.");
                         }
                     }
                     catch (Exception bgEx)
                     {
-                        _log.Log($"❌ Background task error: {bgEx.Message}");
+                        log.Log($"❌ Background task error: {bgEx.Message}");
                     }
                 });
 
@@ -148,15 +148,19 @@ namespace NetSuiteAutomation.Controllers
                     try
                     {
                         var runner = @"C:\ADSK-Automation\Release\AccessMacroRunner.exe";
-                        var psi = new ProcessStartInfo
+                        _backgroundTasks.Enqueue(async (services, cancellationToken) =>
                         {
-                            FileName = runner,
-                            Arguments = "emailreports",
-                            UseShellExecute = false,
-                            CreateNoWindow = true
-                        };
-                        Process.Start(psi);
-                        _log.Log("🚀 Launched AccessMacroRunner.exe emailreports");
+                            var log = services.GetRequiredService<LogService>();
+                            var processRunner = services.GetRequiredService<ChildProcessRunner>();
+                            var result = await processRunner.RunAsync(runner, new[] { "emailreports" }, cancellationToken);
+
+                            if (!string.IsNullOrWhiteSpace(result.StandardOutput)) log.Log("AccessMacroRunner output: " + result.StandardOutput.Trim());
+                            if (!string.IsNullOrWhiteSpace(result.StandardError)) log.Log("AccessMacroRunner error: " + result.StandardError.Trim());
+                            if (result.ExitCode != 0)
+                                throw new InvalidOperationException("AccessMacroRunner emailreports exited with code " + result.ExitCode + ".");
+
+                            log.Log("AccessMacroRunner emailreports completed successfully.");
+                        });
                     }
                     catch (Exception ex)
                     {

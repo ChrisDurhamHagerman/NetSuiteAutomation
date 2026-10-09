@@ -17,6 +17,9 @@ builder.Services.AddSingleton<AccessImportService>();
 builder.Services.AddSingleton<ImportFormaService>();
 builder.Services.AddSingleton<FormaAccessImporter>();
 builder.Services.AddSingleton<LogService>();
+builder.Services.AddSingleton<BackgroundTaskQueue>();
+builder.Services.AddHostedService<BackgroundTaskWorker>();
+builder.Services.AddSingleton<ChildProcessRunner>();
 builder.Services.AddScoped<AccessMacroService>();
 builder.Services.AddScoped<ProjectActivityService>();
 

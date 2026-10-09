@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using NetSuiteAutomation.Services;
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -14,6 +13,7 @@ namespace NetSuiteAutomation.Controllers
     public class CreditSafeController : ControllerBase
     {
         private readonly LogService _log;
+        private readonly BackgroundTaskQueue _backgroundTasks;
 
         private static readonly string ExportRoot = @"C:\ADSK-Automation\CreditSafe Imports\NetSuiteExports";
         private static readonly string ArchiveRoot = Path.Combine(ExportRoot, "Old Imports");
@@ -21,9 +21,10 @@ namespace NetSuiteAutomation.Controllers
         private static readonly string CustomerFile = "CustomerSync.csv";
         private static readonly string InvoiceFile = "InvoiceDSOSync.csv";
 
-        public CreditSafeController(LogService log)
+        public CreditSafeController(LogService log, BackgroundTaskQueue backgroundTasks)
         {
             _log = log;
+            _backgroundTasks = backgroundTasks;
         }
 
         public class ImportPayload
@@ -75,41 +76,27 @@ namespace NetSuiteAutomation.Controllers
                 });
 
                 // Kick off the downstream processor in the background
-                Task.Run(() =>
+                _backgroundTasks.Enqueue(async (services, cancellationToken) =>
                 {
+                    var log = services.GetRequiredService<LogService>();
+                    var processRunner = services.GetRequiredService<ChildProcessRunner>();
                     try
                     {
-                        if (!System.IO.File.Exists(CreditSafeExe))
-                        {
-                            _log.Log($"CreditSafeController.exe not found at: {CreditSafeExe}. Skipping launch.");
-                            return;
-                        }
+                        var result = await processRunner.RunAsync(CreditSafeExe, cancellationToken: cancellationToken);
 
-                        var psi = new ProcessStartInfo
-                        {
-                            FileName = CreditSafeExe,
-                            Arguments = "", // to be defined when you add CLI args
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true
-                        };
+                        if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+                            log.Log($"CreditSafeController.exe output: {result.StandardOutput.Trim()}");
+                        if (!string.IsNullOrWhiteSpace(result.StandardError))
+                            log.Log($"CreditSafeController.exe error: {result.StandardError.Trim()}");
 
-                        using var p = Process.Start(psi);
-                        string stdOut = p.StandardOutput.ReadToEnd();
-                        string stdErr = p.StandardError.ReadToEnd();
-                        p.WaitForExit();
-
-                        if (!string.IsNullOrWhiteSpace(stdOut))
-                            _log.Log($"CreditSafeController.exe output: {stdOut.Trim()}");
-                        if (!string.IsNullOrWhiteSpace(stdErr))
-                            _log.Log($"CreditSafeController.exe error: {stdErr.Trim()}");
-
-                        _log.Log($"CreditSafeController.exe exited with code {p.ExitCode}.");
+                        log.Log($"CreditSafeController.exe exited with code {result.ExitCode}.");
+                        if (result.ExitCode != 0)
+                            throw new InvalidOperationException("CreditSafe runner exited with code " + result.ExitCode + ".");
                     }
                     catch (Exception ex)
                     {
-                        _log.Log($"Error launching CreditSafeController.exe: {ex.Message}");
+                        log.Log($"Error launching CreditSafeController.exe: {ex.Message}");
+                        throw;
                     }
                 });
 
